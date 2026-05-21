@@ -14,7 +14,129 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cytotoxicity_predictions: {
+        Row: {
+          cell_type: string | null
+          central_metal_atom: string | null
+          concentration: number | null
+          exposure_time: number | null
+          organic_ligand: string | null
+          predicted_cell_viability: number | null
+          prediction_date: string | null
+          prediction_id: number
+          size: number | null
+          zeta_potential: number | null
+        }
+        Insert: {
+          cell_type?: string | null
+          central_metal_atom?: string | null
+          concentration?: number | null
+          exposure_time?: number | null
+          organic_ligand?: string | null
+          predicted_cell_viability?: number | null
+          prediction_date?: string | null
+          prediction_id?: number
+          size?: number | null
+          zeta_potential?: number | null
+        }
+        Update: {
+          cell_type?: string | null
+          central_metal_atom?: string | null
+          concentration?: number | null
+          exposure_time?: number | null
+          organic_ligand?: string | null
+          predicted_cell_viability?: number | null
+          prediction_date?: string | null
+          prediction_id?: number
+          size?: number | null
+          zeta_potential?: number | null
+        }
+        Relationships: []
+      }
+      drug_loading_predictions: {
+        Row: {
+          bit148: boolean | null
+          bit223: boolean | null
+          bit657: boolean | null
+          central_metal_atom: string | null
+          organic_ligand: string | null
+          predicted_loading_capacity: number | null
+          prediction_date: string | null
+          prediction_id: number
+        }
+        Insert: {
+          bit148?: boolean | null
+          bit223?: boolean | null
+          bit657?: boolean | null
+          central_metal_atom?: string | null
+          organic_ligand?: string | null
+          predicted_loading_capacity?: number | null
+          prediction_date?: string | null
+          prediction_id?: number
+        }
+        Update: {
+          bit148?: boolean | null
+          bit223?: boolean | null
+          bit657?: boolean | null
+          central_metal_atom?: string | null
+          organic_ligand?: string | null
+          predicted_loading_capacity?: number | null
+          prediction_date?: string | null
+          prediction_id?: number
+        }
+        Relationships: []
+      }
+      drugs: {
+        Row: {
+          drug_id: number
+          drug_name: string
+          morgan_fp_bit148: boolean | null
+          morgan_fp_bit223: boolean | null
+          morgan_fp_bit657: boolean | null
+          smiles_string: string | null
+        }
+        Insert: {
+          drug_id?: number
+          drug_name: string
+          morgan_fp_bit148?: boolean | null
+          morgan_fp_bit223?: boolean | null
+          morgan_fp_bit657?: boolean | null
+          smiles_string?: string | null
+        }
+        Update: {
+          drug_id?: number
+          drug_name?: string
+          morgan_fp_bit148?: boolean | null
+          morgan_fp_bit223?: boolean | null
+          morgan_fp_bit657?: boolean | null
+          smiles_string?: string | null
+        }
+        Relationships: []
+      }
+      mofs: {
+        Row: {
+          central_metal_atom: string | null
+          functional_group: string | null
+          mof_id: number
+          mof_name: string | null
+          organic_ligand: string | null
+        }
+        Insert: {
+          central_metal_atom?: string | null
+          functional_group?: string | null
+          mof_id?: number
+          mof_name?: string | null
+          organic_ligand?: string | null
+        }
+        Update: {
+          central_metal_atom?: string | null
+          functional_group?: string | null
+          mof_id?: number
+          mof_name?: string | null
+          organic_ligand?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
