@@ -1,154 +1,245 @@
-# MOFs Predictor — Scientific Web Application
+# NanoCarrier-AI Formulation Discovery Studio
 
-A modern, full-stack web application for predicting **Drug Loading Capacity** and **Cytotoxicity** of **Metal-Organic Frameworks (MOFs)** materials using simulated machine learning models.
+Ứng dụng web hỗ trợ khám phá công thức nano-carrier dựa trên MOF
+(Metal-Organic Frameworks) bằng giao diện đề xuất đa mục tiêu
+(Multi-Objective Recommendation Engine).
 
-## Deployment: 
-https://mof-predict-labs.legiavan0210.workers.dev/
+Mục tiêu của dự án là giúp người dùng nhập bối cảnh công thức, sàng lọc
+nhanh các MOF ứng viên, quan sát Pareto Frontier, nhận cảnh báo Burst
+Release, và xử lý nhiều mẫu bằng file CSV/XLSX.
 
----
+> Lưu ý: các điểm dự đoán hiện tại được tính bằng logic mô phỏng trong
+> `src/lib/formulation.ts`. Đây chưa phải model ML đã được huấn luyện hoặc
+> xác thực lâm sàng. Bioavailability và Burst Release hiện là placeholder
+> deterministic để phục vụ prototype giao diện và luồng xử lý.
 
-## Table of Contents
+## Mục Lục
 
-- [Overview](#overview)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Environment Variables](#environment-variables)
-  - [Run Development Server](#run-development-server)
-- [Usage](#usage)
-- [Database Schema](#database-schema)
-- [API Reference](#api-reference)
-- [Screenshots](#screenshots)
-- [License](#license)
+- [Chức năng chính](#chức-năng-chính)
+- [Luồng sử dụng](#luồng-sử-dụng)
+- [Batch Upload](#batch-upload)
+- [Cấu hình bài toán](#cấu-hình-bài-toán)
+- [Cài đặt và chạy dự án](#cài-đặt-và-chạy-dự-án)
+- [Cấu trúc dự án](#cấu-trúc-dự-án)
+- [Các file quan trọng](#các-file-quan-trọng)
+- [Công thức và giả định hiện tại](#công-thức-và-giả-định-hiện-tại)
+- [Kiểm thử và build](#kiểm-thử-và-build)
+- [Ghi chú triển khai](#ghi-chú-triển-khai)
 
----
+## Chức Năng Chính
 
-## Overview
+### 1. Single Input Form
 
-**MOFs Predictor** is a scientific simulation platform designed for researchers studying Metal-Organic Frameworks. The application provides:
+Sidebar bên trái là form nhập liệu một công thức đơn lẻ.
 
-- **Drug Loading Capacity Prediction** — Estimate how much drug a MOF can carry (g/g) based on central metal atom, organic ligand, and Morgan fingerprint bits.
-- **Cytotoxicity Prediction** — Predict cell viability percentage based on MOF composition, concentration, particle size, Zeta potential, and exposure time.
-- **Batch Processing** — Upload CSV or Excel files to run predictions on multiple MOF configurations at once.
-- **Prediction History** — View and track all past predictions stored in the database.
+Các nhóm dữ liệu gồm:
 
-> **Note:** This project uses **mock API** endpoints that simulate ML inference with realistic scientific formulas. It is intended for demonstration, research prototyping, and educational purposes.
+- **Cargo Identification**
+  - Chọn therapeutic payload.
+  - Tự hiển thị các thông số đọc-only: LogP, Molecular Weight, TPSA.
 
----
+- **Clinical Context Restraints**
+  - Target pH.
+  - Pharmacokinetic Objective.
+  - Cell line.
+  - Concentration.
+  - Exposure time.
+  - Burst Release threshold.
 
-## Features
+- **MOF Material Properties**
+  - Metal ion node.
+  - Linker structure.
+  - Surface area min/max.
+  - Pore volume min/max.
+  - Pore size min/max.
 
-| Module | Description |
-|--------|-------------|
-| **Drug Loading Predictor** | Input MOF composition (metal, ligand, fingerprint bits) and get predicted loading capacity with feature impact visualization (SHAP-style bar chart). |
-| **Cytotoxicity Predictor** | Input concentration, size, Zeta potential, exposure time to predict cell viability with smart color-coded progress indicator. |
-| **Batch Prediction** | Upload `.csv` or `.xlsx` files for bulk predictions. Downloadable template included. |
-| **History Dashboard** | View all saved predictions fetched directly from the database with pagination. |
-| **Responsive UI** | Built with Tailwind CSS and shadcn/ui components. Works on desktop and mobile. |
-| **Real-time Feedback** | Toast notifications for success/error states using Sonner. |
+- **ML Model Ranking Filters**
+  - Trọng số tối ưu Drug Loading.
+  - Trọng số Target Release.
+  - Trọng số IC50.
 
----
+Validation được xử lý bằng `react-hook-form` và `zod`. Nếu thiếu trường bắt
+buộc hoặc nhập khoảng min/max không hợp lệ, UI sẽ hiển thị lỗi trực tiếp dưới
+trường nhập.
 
-## Tech Stack
+### 2. Results Dashboard
 
-| Layer | Technology |
-|-------|------------|
-| **Framework** | [TanStack Start](https://tanstack.com/start) (React 19 + SSR/SSG) |
-| **Build Tool** | Vite 7 |
-| **Language** | TypeScript |
-| **Styling** | Tailwind CSS v4 |
-| **UI Components** | shadcn/ui |
-| **Charts** | Recharts |
-| **Database** | Supabase (PostgreSQL) |
-| **State / Notifications** | Sonner (toasts) |
-| **Icons** | Lucide React |
+Khu vực bên phải hiển thị kết quả screening:
 
----
+- Danh sách **Master Recommendations** theo thứ hạng.
+- Card kết quả cho từng MOF ứng viên.
+- Các chỉ số:
+  - Predicted Loading.
+  - Release at target pH.
+  - Target Cell Viability.
+  - Bioavailability.
+  - Match percentage.
+- Badge Pareto nếu ứng viên nằm trên Pareto Frontier.
+- Badge Burst Release nếu early release vượt threshold người dùng đặt.
+- Export JSON cho danh sách recommendations hiện tại.
 
-## Project Structure
+### 3. Pareto Frontier
 
+Biểu đồ scatter plot dùng `recharts`.
+
+Trục hiện tại:
+
+- X: Predicted Loading.
+- Y: Bioavailability.
+- Kích thước điểm: Match percentage.
+- Màu điểm: Pareto hoặc non-Pareto candidate.
+
+Pareto hiện được tính trên kết quả từ Single Input Form, không phải riêng cho
+Batch Upload.
+
+### 4. Batch Upload
+
+Người dùng có thể xử lý nhiều dòng dữ liệu bằng CSV/XLSX:
+
+- Tải template CSV hoặc XLSX ngay trong giao diện.
+- Kéo thả hoặc chọn file từ máy.
+- Xem preview 5-10 dòng đầu.
+- Chạy Batch Ranking.
+- Sort/filter bảng kết quả theo Match, Loading, Release, IC50, Bioavailability.
+
+### 5. Problem Configuration
+
+Nút **Configure** mở modal cấu hình bài toán:
+
+- Chọn biến thuộc nhóm **Input Variables**.
+- Chọn biến thuộc nhóm **Target Variables**.
+- Reset về cấu hình mặc định.
+- Lưu cấu hình trong state giao diện hiện tại.
+
+Phần này hiện là cấu hình frontend để chuẩn bị cho Plugin Mode hoặc pipeline
+ML thật trong tương lai.
+
+## Luồng Sử Dụng
+
+1. Mở ứng dụng.
+2. Ở sidebar, chọn payload và nhập bối cảnh lâm sàng.
+3. Nhập ràng buộc vật liệu MOF.
+4. Điều chỉnh trọng số ranking.
+5. Bấm **Run Screening**.
+6. Xem Pareto Frontier và Master Recommendations.
+7. Kiểm tra các badge cảnh báo như Burst Release.
+8. Bấm **Export** nếu muốn tải kết quả JSON.
+
+## Batch Upload
+
+### Tải Template
+
+Trong tab **Batch Upload**, bấm:
+
+- **CSV Template** để tải `batch-template.csv`.
+- **XLSX Template** để tải `batch-template.xlsx`.
+
+Template có sẵn 2 dòng ví dụ. Người dùng có thể sửa dữ liệu và upload lại.
+
+### Cấu Trúc Cột Bắt Buộc
+
+File batch nên có các cột sau:
+
+| Cột           | Ý nghĩa                | Ví dụ                  |
+| ------------- | ---------------------- | ---------------------- |
+| `payload`     | Tên hoạt chất/payload  | `Doxorubicin`          |
+| `targetPh`    | pH mục tiêu            | `6.5`                  |
+| `metalNode`   | Node ion kim loại      | `Zr4+`                 |
+| `linker`      | Linker hữu cơ          | `2-aminoterephthalate` |
+| `surfaceArea` | Diện tích bề mặt, m2/g | `1120`                 |
+| `poreVolume`  | Thể tích lỗ xốp, cm3/g | `0.46`                 |
+| `poreSize`    | Kích thước lỗ xốp, nm  | `0.8`                  |
+
+Nếu thiếu cột, hệ thống vẫn preview file nhưng sẽ cảnh báo và dùng giá trị
+mặc định từ sidebar cho phần dữ liệu thiếu.
+
+### Ví Dụ CSV
+
+```csv
+payload,targetPh,metalNode,linker,surfaceArea,poreVolume,poreSize
+Doxorubicin,6.5,Zr4+,2-aminoterephthalate,1120,0.46,0.8
+Curcumin,6.2,Fe3+,terephthalate,2850,1.25,2.9
 ```
-mof-predict-labs/
-├── public/                    # Static assets
-├── src/
-│   ├── components/
-│   │   ├── CytotoxicityModule.tsx    # Cytotoxicity predictor UI
-│   │   ├── DrugLoadingModule.tsx     # Drug loading predictor UI
-│   │   └── HistoryModule.tsx         # Prediction history table
-│   ├── hooks/
-│   │   └── use-mobile.tsx            # Mobile breakpoint hook
-│   ├── integrations/
-│   │   └── supabase/
-│   │       ├── auth-attacher.ts      # Attach auth to server functions
-│   │       ├── auth-middleware.ts    # Auth middleware for server functions
-│   │       ├── client.ts           # Supabase browser client
-│   │       ├── client.server.ts    # Supabase admin client (server-only)
-│   │       └── types.ts            # Auto-generated Supabase types
-│   ├── lib/
-│   │   ├── batch-input.ts          # CSV/Excel parsing utilities
-│   │   ├── error-capture.ts        # Error handling
-│   │   ├── error-page.ts           # Error page helpers
-│   │   ├── mock-api.ts             # Mock prediction API logic
-│   │   └── utils.ts                # General utilities
-│   ├── routes/
-│   │   ├── __root.tsx              # Root layout (shell)
-│   │   └── index.tsx               # Homepage with tabs
-│   ├── router.tsx                  # TanStack Router setup
-│   ├── server.ts                   # Server entry
-│   ├── start.ts                    # TanStack Start configuration
-│   └── styles.css                  # Global styles & design tokens
-├── supabase/
-│   ├── config.toml                 # Supabase local config
-│   └── migrations/                 # Database migrations
-├── .env                            # Environment variables (not tracked)
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-└── wrangler.jsonc                  # Cloudflare Workers config
+
+## Cấu Hình Bài Toán
+
+Mở modal bằng nút **Configure** ở góc trên bên phải dashboard.
+
+Cấu hình mặc định:
+
+- Input variables:
+  - `payload`
+  - `logP`
+  - `molecularWeight`
+  - `tpsa`
+  - `targetPh`
+  - `metalNode`
+  - `linker`
+  - `surfaceArea`
+  - `poreVolume`
+  - `poreSize`
+
+- Target variables:
+  - `loading`
+  - `releaseAtTargetPh`
+  - `ic50`
+  - `bioavailability`
+
+## Cài Đặt Và Chạy Dự Án
+
+### Yêu Cầu
+
+- Node.js 18+.
+- npm.
+
+Dự án có `bun.lock`, nhưng trên Windows có thể dùng npm bình thường.
+
+### Cài Dependencies
+
+```bash
+npm install
 ```
 
----
+### Chạy Development Server
 
-## Getting Started
+```bash
+npm run dev
+```
 
-### Prerequisites
+Mặc định Vite sẽ chạy ở:
 
-Ensure you have one of the following package managers installed:
+```text
+http://localhost:5173/
+```
 
-- [Node.js](https://nodejs.org/) (v18+) with `npm`
-- or `pnpm`
-- or `yarn`
+Nếu port 5173 đã bận, Vite có thể tự chuyển sang port khác. Kiểm tra log trong
+terminal để lấy URL chính xác.
 
-> **Note:** This project uses `bun` by default in the Lovable environment. On Windows without Bun, use `npm` instead.
+### Build Production
 
-### Installation
+```bash
+npm run build
+```
 
-1. **Clone the repository:**
+### Preview Production Build
 
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/mof-predict-labs.git
-   cd mof-predict-labs
-   ```
+```bash
+npm run preview
+```
 
-2. **Install dependencies:**
+### Lint
 
-   ```bash
-   # Using npm (recommended for Windows)
-   npm install
+```bash
+npm run lint
+```
 
-   # Or using pnpm
-   pnpm install
+Ghi chú: repo hiện có một số file cũ dùng CRLF nên `npm run lint` toàn repo có
+thể báo lỗi Prettier line ending. Các file mới của Formulation Discovery Studio
+đã được format và lint scoped thành công trong quá trình triển khai.
 
-   # Or using yarn
-   yarn install
-   ```
+## Biến Môi Trường
 
-### Environment Variables
-
-Create a `.env` file in the project root with the following variables:
+File `.env` có thể chứa cấu hình Supabase cho các module legacy:
 
 ```env
 VITE_SUPABASE_URL=
@@ -156,172 +247,196 @@ VITE_SUPABASE_PUBLISHABLE_KEY=
 VITE_SUPABASE_PROJECT_ID=
 ```
 
-> **Important:** The values above are example publishable keys for the connected Supabase project. Replace them with your own if you are using a different backend.
+Giao diện chính hiện tại của NanoCarrier-AI không bắt buộc Supabase để chạy
+screening mô phỏng. Các module cũ như Drug Loading, Cytotoxicity và History vẫn
+còn trong source code và có thể phụ thuộc Supabase/mock API cũ nếu được nối lại.
 
-### Run Development Server
+## Cấu Trúc Dự Án
+
+```text
+mof-predict-labs/
+├── src/
+│   ├── components/
+│   │   ├── FormulationSidebar.tsx
+│   │   ├── ResultsDashboard.tsx
+│   │   ├── ResultCard.tsx
+│   │   ├── BatchUploadView.tsx
+│   │   ├── BatchRankingTable.tsx
+│   │   ├── ProblemConfigurationModal.tsx
+│   │   ├── DrugLoadingModule.tsx
+│   │   ├── CytotoxicityModule.tsx
+│   │   ├── HistoryModule.tsx
+│   │   └── ui/
+│   ├── lib/
+│   │   ├── formulation.ts
+│   │   ├── batch-parser.ts
+│   │   ├── batch-input.ts
+│   │   ├── mock-api.ts
+│   │   └── utils.ts
+│   ├── routes/
+│   │   ├── index.tsx
+│   │   └── __root.tsx
+│   ├── styles.css
+│   ├── router.tsx
+│   ├── server.ts
+│   └── start.ts
+├── supabase/
+├── package.json
+├── vite.config.ts
+├── tsconfig.json
+└── wrangler.jsonc
+```
+
+## Các File Quan Trọng
+
+| File                                           | Vai trò                                                             |
+| ---------------------------------------------- | ------------------------------------------------------------------- |
+| `src/routes/index.tsx`                         | Route chính, layout Sidebar + Main Dashboard                        |
+| `src/components/FormulationSidebar.tsx`        | Form nhập liệu single screening                                     |
+| `src/components/ResultsDashboard.tsx`          | Dashboard kết quả, Pareto chart, export, batch tab                  |
+| `src/components/ResultCard.tsx`                | Card hiển thị từng recommendation                                   |
+| `src/components/BatchUploadView.tsx`           | Upload file, tải template CSV/XLSX, preview dữ liệu                 |
+| `src/components/BatchRankingTable.tsx`         | Bảng ranking batch có sort/filter                                   |
+| `src/components/ProblemConfigurationModal.tsx` | Modal chọn input/target variables                                   |
+| `src/lib/formulation.ts`                       | Schema Zod, mock candidate database, scoring, Pareto, batch ranking |
+| `src/lib/batch-parser.ts`                      | Parser CSV/XLSX bằng thư viện `xlsx`                                |
+| `src/routes/__root.tsx`                        | Shell, metadata, QueryClient, Toaster                               |
+
+## Công Thức Và Giả Định Hiện Tại
+
+### Candidate Database
+
+Danh sách MOF ứng viên đang hard-code trong `src/lib/formulation.ts`, gồm:
+
+- UiO-66-NH2.
+- MIL-101(Fe).
+- ZIF-8.
+- PCN-224.
+- HKUST-1.
+- MIL-100(Fe).
+
+Mỗi ứng viên có các thuộc tính như metal node, linker, surface area, pore
+volume, pore size và stability.
+
+### Scoring
+
+Hàm `runScreening()` tính:
+
+- Predicted Loading.
+- Release at target pH.
+- Early Release.
+- IC50.
+- Target Cell Viability.
+- Bioavailability.
+- Match percentage.
+- Pareto flag.
+- Burst Release flag.
+
+Điểm Match được tính từ trọng số người dùng nhập:
+
+- `weightLoading`
+- `weightRelease`
+- `weightIc50`
+
+### Burst Release
+
+Burst Release hiện được xác định bằng:
+
+```ts
+earlyRelease > burstThreshold;
+```
+
+Trong đó `burstThreshold` là phần trăm early release do người dùng nhập ở
+sidebar.
+
+### Bioavailability
+
+Bioavailability hiện là chỉ số mô phỏng dựa trên loading, release, hydrophobic
+fit, TPSA và pore score. Cần thay thế bằng model hoặc công thức đã được xác
+thực nếu dùng cho nghiên cứu thật.
+
+## Kiểm Thử Và Build
+
+Các lệnh nên chạy trước khi deploy:
 
 ```bash
-# Using npm
-npm run dev
-
-# Or with pnpm
-pnpm dev
-
-# Or with yarn
-yarn dev
+npm run build
 ```
 
-The app will be available at: **http://localhost:3000**
-
----
-
-## Usage
-
-1. **Drug Loading Prediction**
-   - Select the central metal atom and organic ligand.
-   - Check/uncheck Morgan fingerprint bits.
-   - Click **"Predict Loading Capacity"** to see results.
-   - View the feature impact bar chart.
-
-2. **Cytotoxicity Prediction**
-   - Fill in concentration, particle size, Zeta potential, and exposure time.
-   - Click **"Predict Cytotoxicity"** to get cell viability.
-   - Observe the color-coded survival progress bar.
-
-3. **Batch Prediction**
-   - Download the CSV template from either module.
-   - Fill in your data and upload the file.
-   - Click **"Predict Batch File"** to process all rows.
-
-4. **View History**
-   - Switch to the **History** tab to see all past predictions.
-   - Data is fetched live from the Supabase database.
-
----
-
-## Database Schema
-
-The application uses the following Supabase tables:
-
-### `drug_loading_predictions`
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | `uuid` | Primary key |
-| `central_metal_atom` | `text` | Metal atom (Zn, Cr, Fe, Cu, Zr, Mg) |
-| `organic_ligand` | `text` | Ligand (Dio, Bdc, Isa, Meim) |
-| `bit148` | `boolean` | Morgan fingerprint bit 148 |
-| `bit223` | `boolean` | Morgan fingerprint bit 223 |
-| `bit657` | `boolean` | Morgan fingerprint bit 657 |
-| `predicted_loading_capacity` | `float` | Predicted loading in g/g |
-| `created_at` | `timestamptz` | Auto-generated timestamp |
-
-### `cytotoxicity_predictions`
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | `uuid` | Primary key |
-| `central_metal_atom` | `text` | Metal atom |
-| `organic_ligand` | `text` | Ligand |
-| `concentration` | `float` | Concentration (µg/mL) |
-| `size` | `float` | Particle size (nm) |
-| `zeta_potential` | `float` | Zeta potential (mV) |
-| `exposure_time` | `integer` | Exposure time (hours) |
-| `predicted_cell_viability` | `float` | Predicted viability (%) |
-| `created_at` | `timestamptz` | Auto-generated timestamp |
-
-Both tables are configured with **Row Level Security (RLS)** policies allowing public read/write access for demonstration purposes.
-
----
-
-## API Reference
-
-### Mock Prediction Functions
-
-Located in `src/lib/mock-api.ts`:
-
-#### `predictDrugLoading(payload: DrugLoadingPayload): Promise<DrugLoadingResponse>`
-
-Simulates ML inference for drug loading capacity.
-
-**Payload:**
-```ts
-{
-  central_metal_atom: string;  // "Zn", "Cr", "Fe", "Cu", "Zr", "Mg"
-  organic_ligand: string;      // "Dio", "Bdc", "Isa", "Meim"
-  bit148: boolean;
-  bit223: boolean;
-  bit657: boolean;
-}
+```bash
+npm run lint
 ```
 
-**Response:**
-```ts
-{
-  loading_capacity: number;    // e.g., 0.234
-  unit: "g/g";
-}
+Nếu chỉ muốn lint các file mới của NanoCarrier-AI:
+
+```bash
+.\node_modules\.bin\eslint.cmd src\components\FormulationSidebar.tsx src\components\ResultsDashboard.tsx src\components\ResultCard.tsx src\components\BatchUploadView.tsx src\components\BatchRankingTable.tsx src\components\ProblemConfigurationModal.tsx src\lib\formulation.ts src\lib\batch-parser.ts src\routes\index.tsx
 ```
 
-#### `predictCytotoxicity(payload: CytotoxicityPayload): Promise<CytotoxicityResponse>`
+## Tech Stack
 
-Simulates ML inference for cytotoxicity.
+| Lớp              | Công nghệ                          |
+| ---------------- | ---------------------------------- |
+| Framework        | TanStack Start, React 19           |
+| Build tool       | Vite 7                             |
+| Language         | TypeScript                         |
+| Styling          | Tailwind CSS v4                    |
+| UI primitives    | Radix UI / shadcn-style components |
+| Form             | react-hook-form                    |
+| Validation       | zod                                |
+| Chart            | Recharts                           |
+| File parsing     | xlsx                               |
+| Notification     | Sonner                             |
+| Icons            | lucide-react                       |
+| Optional backend | Supabase                           |
 
-**Payload:**
-```ts
-{
-  central_metal_atom: string;
-  organic_ligand: string;
-  concentration: number;        // µg/mL
-  size: number;                 // nm
-  zeta_potential: number;       // mV
-  exposure_time: number;        // hours (24, 48, 72)
-}
+## Ghi Chú Triển Khai
+
+- Layout chính hiện tại không còn dùng tab `DrugLoading`, `Cytotoxicity`,
+  `History` trên trang chủ.
+- Các module legacy vẫn còn trong `src/components` để tham khảo hoặc tái sử
+  dụng.
+- Batch template được tạo trực tiếp ở frontend, không cần file tĩnh trong
+  `public`.
+- Export kết quả hiện là JSON phía client.
+- Nếu nối model ML thật, nên thay thế logic trong `src/lib/formulation.ts`
+  bằng API inference hoặc server function.
+- Nếu bundle production quá lớn, nên code-split phần Batch Upload vì thư viện
+  `xlsx` làm tăng kích thước chunk.
+
+## Deployment
+
+Dự án có cấu hình `wrangler.jsonc` và Cloudflare/Vite plugin, nên có thể deploy
+lên Cloudflare Workers nếu môi trường đã được cấu hình.
+
+Build production:
+
+```bash
+npm run build
 ```
 
-**Response:**
-```ts
-{
-  cell_viability: number;     // 10 - 100
-  unit: "%";
-}
-```
+Sau đó dùng pipeline deploy tương ứng với Cloudflare hoặc nền tảng hosting của
+dự án.
 
----
+## Trạng Thái Hiện Tại
 
-## Screenshots
+Đã có:
 
-> *(Screenshots can be added here once the app is running)*
+- Giao diện NanoCarrier-AI dạng Sidebar + Dashboard.
+- Form validation.
+- Screening mô phỏng.
+- Pareto Frontier.
+- Master Recommendations.
+- Burst Release warning.
+- Batch upload CSV/XLSX.
+- Download template CSV/XLSX.
+- Batch preview và ranking table.
+- Problem Configuration modal.
 
-### Drug Loading Module
-- Input form with metal/ligand selectors
-- SHAP-style feature impact bar chart
-- Batch file upload support
+Cần bổ sung trong các giai đoạn tiếp theo:
 
-### Cytotoxicity Module
-- Parameter input form
-- Cell viability result with smart progress bar
-- Concentration-based survival visualization
-
-### History Tab
-- Paginated data table
-- Live data from Supabase
-
----
-
-## License
-
-This project is built for research and educational purposes. Feel free to modify and extend it for your own scientific applications.
-
----
-
-## Acknowledgments
-
-- Built with [Lovable](https://lovable.dev) — AI-powered full-stack development platform.
-- UI components powered by [shadcn/ui](https://ui.shadcn.com).
-- Charts powered by [Recharts](https://recharts.org).
-- Backend powered by [Supabase](https://supabase.com).
-
----
-
-> **Made for MOFs Research Community** 🧪🔬
+- Model ML thật cho loading/release/IC50/bioavailability.
+- Định nghĩa khoa học chính thức cho Burst Release threshold.
+- Mapping cột batch nâng cao nếu dữ liệu thực tế có nhiều format khác nhau.
+- Unit test cho schema, parser và scoring.
+- Lưu lịch sử dự đoán nếu cần tracking lâu dài.
