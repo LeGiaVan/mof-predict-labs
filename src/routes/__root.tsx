@@ -73,11 +73,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "NanoCarrier-AI Formulation Discovery Studio" },
+      {
+        name: "description",
+        content: "Multi-objective MOF formulation recommendation engine",
+      },
+      { name: "author", content: "NanoCarrier-AI" },
+      { property: "og:title", content: "NanoCarrier-AI Formulation Discovery Studio" },
+      {
+        property: "og:description",
+        content: "Multi-objective MOF formulation recommendation engine",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
